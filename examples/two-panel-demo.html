@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Riso Zine Lite — 2-Panel Continuous Scroll Demo</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #ece3cf;
+    color: #48545c;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    padding: 20px 20px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  .bar {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .btn {
+    background: #ec5a5b;
+    color: #fbf5e6;
+    border: none;
+    border-radius: 2px;
+    padding: 5px 12px;
+    font-weight: 700;
+    font-size: 11.5px;
+    cursor: pointer;
+  }
+  .btn.alt { background: #1d64b8; }
+  .strip {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    box-shadow: 0 22px 55px rgba(72, 84, 92, 0.25);
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  svg.poster {
+    width: 840px;
+    height: 1120px;
+    flex: 0 0 auto;
+    display: block;
+    background: #fbf5e6;
+  }
+  body.export-single { padding: 0; gap: 0; background: #fbf5e6; display: block; }
+  body.export-single .bar { display: none; }
+  body.export-single .strip { box-shadow: none; display: block; }
+  body.export-single svg.poster { display: none; }
+  body.export-single svg.poster.active-export { display: block; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <span>RISO ZINE LITE · 1680 x 1120 (2 PANELS @ 840 x 1120)</span>
+  <button class="btn" id="gridBtn" type="button">TOGGLE GRID (G)</button>
+  <button class="btn alt" id="expPanelsBtn" type="button">EXPORT PANELS</button>
+  <button class="btn alt" id="expFullBtn" type="button">EXPORT FULL SCROLL</button>
+  <span id="coords">hover panel for (x, y)</span>
+</div>
+<div class="strip">
+  <svg class="poster" id="p1" viewBox="0 0 840 1120" overflow="hidden" xmlns="http://www.w3.org/2000/svg"></svg>
+  <svg class="poster" id="p2" viewBox="0 0 840 1120" overflow="hidden" xmlns="http://www.w3.org/2000/svg"></svg>
+</div>
+
+<script src="../lib/riso-zine.js"></script>
+<script>
+(function () {
+  const PANELS = [{ id: "p1" }, { id: "p2" }];
+  const TOTAL_W = 1680;
+  let showGrid = false;
+  const gridLayers = [];
+
+  function drawWorld(m, idx) {
+    const el = RisoZine.el;
+    const cRed  = m.tint("coral", 0.94);
+    const cBlue = m.tint("blue",  0.94);
+    const gx = -idx * 840;
+
+    // Panel-scoped tactile ink filter (wraps the translated world so seams never clip)
+    const inkUrl = m.inkFilter("ink", 840, 1120, { seed: 19 + idx * 7 });
+    const bg  = el("g", { transform: `translate(${gx}, 0)` }, m.color);
+    const fgStage = el("g", { filter: inkUrl }, m.art);
+    const fg  = el("g", { transform: `translate(${gx}, 0)` }, fgStage);
+
+    m.crosshairs(TOTAL_W, 1120, 280, 280, { startX: 140, startY: 140, parent: bg });
+
+    // Overlapping coral & sky halftone fields that multiply into plum at the seam (x = 840)
+    el("rect", { x: 40,  y: 44, width: 920, height: 1032, fill: m.pat("peach"), opacity: 0.45, style: "mix-blend-mode:multiply" }, bg);
+    el("rect", { x: 720, y: 44, width: 920, height: 1032, fill: m.pat("sky"),   opacity: 0.48, style: "mix-blend-mode:multiply" }, bg);
+
+    // Continuous red & blue recursive feedback loops tightening across the seam
+    [
+      [340, 280], [640, 220], [840, 175], [1040, 220], [1340, 280]
+    ].forEach(([cx, r], i) => {
+      el("circle", {
+        cx, cy: 560, r, fill: "none",
+        stroke: i % 2 === 0 ? cRed : cBlue,
+        "stroke-width": i === 2 ? 7 : 4.5,
+        "stroke-dasharray": i % 2 === 1 ? "14 8" : "none",
+        opacity: 0.88, style: "mix-blend-mode:multiply"
+      }, fg);
+    });
+
+    // Horizontal spine connecting Panel 1 and Panel 2
+    el("line", { x1: 40, y1: 560, x2: 1640, y2: 560, stroke: cRed,  "stroke-width": 5, opacity: 0.85, style: "mix-blend-mode:multiply" }, fg);
+    el("line", { x1: 40, y1: 572, x2: 1640, y2: 572, stroke: cBlue, "stroke-width": 5, "stroke-dasharray": "18 10", opacity: 0.85, style: "mix-blend-mode:multiply" }, fg);
+
+    // Replace with your own razor-blade cutouts from ./tools/cutout:
+    // m.cutout("cutouts/subject-cutout.png", 180, 180, 480, 720, { parent: fg, tone: "coral", backK: "blue", lift: true });
+
+    m.stamp(840, 960, "RISO ZINE LITE", "coral", { parent: fg });
+  }
+
+  function addGrid(svg) {
+    const g = RisoZine.el("g", { opacity: showGrid ? 0.55 : 0, "pointer-events": "none" }, svg);
+    for (let x = 100; x < 840; x += 100) RisoZine.el("line", { x1: x, y1: 0, x2: x, y2: 1120, stroke: RisoZine.INK, "stroke-width": 0.7, "stroke-dasharray": "3 5" }, g);
+    for (let y = 100; y < 1120; y += 100) RisoZine.el("line", { x1: 0, y1: y, x2: 840, y2: y, stroke: RisoZine.INK, "stroke-width": 0.7, "stroke-dasharray": "3 5" }, g);
+    gridLayers.push(g);
+  }
+
+  function drawPanel(meta, idx) {
+    const svg = document.getElementById(meta.id);
+    svg.innerHTML = "";
+    const m = RisoZine.create(svg, { grain: 0.85 });
+    m.paper(840, 1120);
+    drawWorld(m, idx);
+    addGrid(svg);
+  }
+
+  const single = new URLSearchParams(location.search).get("panel");
+  if (single && /^[1-2]$/.test(single)) {
+    document.body.classList.add("export-single");
+    const idx = Number(single) - 1;
+    document.getElementById(PANELS[idx].id).classList.add("active-export");
+    drawPanel(PANELS[idx], idx);
+  } else {
+    PANELS.forEach(drawPanel);
+  }
+
+  const toggle = () => { showGrid = !showGrid; gridLayers.forEach(g => g.setAttribute("opacity", showGrid ? 0.55 : 0)); };
+  document.getElementById("gridBtn").addEventListener("click", toggle);
+  document.getElementById("expPanelsBtn").addEventListener("click", async () => {
+    const svgs = document.querySelectorAll("svg.poster");
+    for (let i = 0; i < svgs.length; i++) await RisoZine.downloadPNG(svgs[i], `demo-${i + 1}.png`, 2);
+  });
+  document.getElementById("expFullBtn").addEventListener("click", () => {
+    RisoZine.downloadScrollPNG(document.querySelectorAll("svg.poster"), "demo-full.png", 2);
+  });
+  window.addEventListener("keydown", e => { if (e.key === "g" || e.key === "G") toggle(); });
+  document.querySelectorAll("svg.poster").forEach((svg, idx) => {
+    svg.addEventListener("mousemove", e => {
+      const r = svg.getBoundingClientRect();
+      document.getElementById("coords").textContent = `P${idx + 1} · x:${Math.round((e.clientX - r.left) * 840 / r.width)}, y:${Math.round((e.clientY - r.top) * 1120 / r.height)}`;
+    });
+  });
+})();
+</script>
+</body>
+</html>
